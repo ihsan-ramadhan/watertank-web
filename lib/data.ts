@@ -8,8 +8,7 @@ export type AlertLog = Tables<'alert_logs'> & {
   devices?: Pick<Device, 'name' | 'location'> | null;
 };
 
-/* ---------- Devices ---------- */
-
+// devices
 export async function fetchDevices(): Promise<Device[]> {
   const { data, error } = await supabase
     .from('devices')
@@ -40,8 +39,7 @@ export async function updateDevice(id: string, fields: Partial<Device>): Promise
   return data;
 }
 
-/* ---------- Thresholds ---------- */
-
+// thresholds
 export async function fetchThresholds(deviceId: string): Promise<ThresholdConfig | null> {
   const { data, error } = await supabase
     .from('threshold_configs')
@@ -72,8 +70,7 @@ export async function updateThreshold(
   return data;
 }
 
-/* ---------- Sensor logs ---------- */
-
+// sensor logs
 export async function fetchSensorLogs(deviceId: string, limit = 50): Promise<SensorLog[]> {
   const { data, error } = await supabase
     .from('sensor_logs')
@@ -168,8 +165,7 @@ export async function fetchLatestLogPerDevice(): Promise<Map<string, SensorLog>>
   return map;
 }
 
-/* ---------- Alerts ---------- */
-
+// alerts
 export async function fetchAlerts(): Promise<AlertLog[]> {
   const { data, error } = await supabase
     .from('alert_logs')
@@ -201,8 +197,7 @@ export async function resolveAlert(id: string): Promise<AlertLog> {
   return data;
 }
 
-/* ---------- Status helpers ---------- */
-
+// status helpers
 export type StatusKey = 'safe' | 'critical' | 'info' | 'unknown';
 
 export interface Status {
@@ -248,8 +243,7 @@ export function alertTypeLabel(type: string): string {
   return type;
 }
 
-/* ---------- Format helpers ---------- */
-
+// formatting
 export function formatTime(iso: string | null | undefined): string {
   if (!iso) return '\u2014';
   return new Date(iso).toLocaleString('id-ID', {

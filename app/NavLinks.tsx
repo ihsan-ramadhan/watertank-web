@@ -25,10 +25,10 @@ export default function NavLinks() {
           <Link
             key={item.href}
             href={item.href}
-            className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors ${
+            className={`whitespace-nowrap rounded-md px-3 py-2 text-xs font-medium transition-colors ${
               active
-                ? "bg-primary/15 text-primary"
-                : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                ? "bg-slate-800 text-teal-400 border border-slate-700"
+                : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
             }`}
           >
             {item.label}
