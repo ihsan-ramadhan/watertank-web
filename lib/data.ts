@@ -245,7 +245,7 @@ export function alertTypeLabel(type: string): string {
 
 // formatting
 export function formatTime(iso: string | null | undefined): string {
-  if (!iso) return '\u2014';
+  if (!iso) return '-';
   return new Date(iso).toLocaleString('id-ID', {
     day: '2-digit',
     month: 'short',
@@ -256,7 +256,7 @@ export function formatTime(iso: string | null | undefined): string {
 }
 
 export function formatDateShort(ts: string | null | undefined): string {
-  if (!ts) return '\u2014';
+  if (!ts) return '-';
   return new Date(ts).toLocaleString('id-ID', {
     day: '2-digit',
     month: 'short',
@@ -266,7 +266,7 @@ export function formatDateShort(ts: string | null | undefined): string {
 }
 
 export function timeAgo(iso: string | null | undefined): string {
-  if (!iso) return '\u2014';
+  if (!iso) return '-';
   const diff = Date.now() - new Date(iso).getTime();
   const sec = Math.floor(diff / 1000);
   if (sec < 60) return `${sec}d lalu`;

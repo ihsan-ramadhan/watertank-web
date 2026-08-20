@@ -172,6 +172,11 @@ function RiwayatContent() {
     };
   }, [selectedId, range, refreshKey]);
 
+  useEffect(() => {
+    const id = setInterval(() => setRefreshKey((k) => k + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
+
   function handleDeviceChange(value: string) {
     setSelectedId(value);
     const params = new URLSearchParams(searchParams.toString());
@@ -203,7 +208,7 @@ function RiwayatContent() {
           </div>
           <p className="mt-0.5 text-xs text-slate-400">
             {selectedDevice
-              ? `${selectedDevice.name} \u2014 ${selectedDevice.location ?? 'Lokasi tidak diset'}`
+              ? `${selectedDevice.name}${selectedDevice.location ? ` · ${selectedDevice.location}` : ''}`
               : 'Pilih tangki untuk melihat riwayat pembacaan sensor'}
           </p>
         </div>

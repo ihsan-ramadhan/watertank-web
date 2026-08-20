@@ -377,7 +377,7 @@ export default function DashboardPage() {
                     </span>
                     <div className="flex items-baseline gap-1">
                       <span className={`font-mono text-2xl font-bold ${textColor}`}>
-                        {percent != null ? `${percent.toFixed(1)}` : '\u2014'}
+                        {percent != null ? `${percent.toFixed(1)}` : '-'}
                       </span>
                       <span className="font-mono text-xs text-slate-400">%</span>
                     </div>
