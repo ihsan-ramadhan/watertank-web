@@ -71,15 +71,24 @@ export async function updateThreshold(
 }
 
 // sensor logs
-export async function fetchSensorLogs(deviceId: string, limit = 50): Promise<SensorLog[]> {
+export async function fetchSensorLogs(deviceId: string, limit = 50, offset = 0): Promise<SensorLog[]> {
   const { data, error } = await supabase
     .from('sensor_logs')
     .select('*')
     .eq('device_id', deviceId)
     .order('recorded_at', { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
   if (error) throw error;
   return data ?? [];
+}
+
+export async function fetchSensorLogsCount(deviceId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('sensor_logs')
+    .select('*', { count: 'exact', head: true })
+    .eq('device_id', deviceId);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 export async function fetchSensorLogsRange(deviceId: string, hours: number): Promise<SensorLog[]> {

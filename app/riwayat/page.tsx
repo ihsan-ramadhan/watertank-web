@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   fetchDevices,
   fetchSensorLogs,
+  fetchSensorLogsCount,
   fetchAggregatedLogs,
   fetchThresholds,
   RANGE_OPTIONS,
@@ -19,6 +20,35 @@ import {
 const CHART_W = 800;
 const CHART_H = 260;
 const PAD = { l: 36, r: 12, t: 12, b: 24 };
+const PAGE_SIZE = 20;
+
+function paginationItems(current: number, lastPage: number): (number | 'ellipsis-start' | 'ellipsis-end')[] {
+  if (lastPage <= 6) {
+    const all: number[] = [];
+    for (let p = 0; p <= lastPage; p++) all.push(p);
+    return all;
+  }
+
+  const items: (number | 'ellipsis-start' | 'ellipsis-end')[] = [0];
+
+  const left = Math.max(1, current - 1);
+  const right = Math.min(lastPage - 1, current + 1);
+
+  if (left > 1) {
+    items.push('ellipsis-start');
+  }
+
+  for (let p = left; p <= right; p++) {
+    items.push(p);
+  }
+
+  if (right < lastPage - 1) {
+    items.push('ellipsis-end');
+  }
+
+  items.push(lastPage);
+  return items;
+}
 
 function LevelChart({ data, low, high }: { data: AggregatedPoint[]; low: number; high: number }) {
   const plotW = CHART_W - PAD.l - PAD.r;
@@ -84,6 +114,9 @@ function RiwayatContent() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+
   const [range, setRange] = useState<RangeKey>('24h');
   const [aggLogs, setAggLogs] = useState<AggregatedPoint[]>([]);
   const [threshold, setThreshold] = useState<ThresholdConfig | null>(null);
@@ -118,9 +151,13 @@ function RiwayatContent() {
 
         setIsLoading(true);
         setError(null);
-        const data = await fetchSensorLogs(targetId, 100);
+        const [data, total] = await Promise.all([
+          fetchSensorLogs(targetId, PAGE_SIZE, page * PAGE_SIZE),
+          fetchSensorLogsCount(targetId),
+        ]);
         if (ignore) return;
         setLogs(data);
+        setTotalCount(total);
       } catch (err: unknown) {
         if (ignore) return;
         setError(err instanceof Error ? err.message : 'Gagal memuat riwayat sensor.');
@@ -134,7 +171,7 @@ function RiwayatContent() {
     return () => {
       ignore = true;
     };
-  }, [selectedId, devices, refreshKey]);
+  }, [selectedId, devices, refreshKey, page]);
 
   useEffect(() => {
     let ignore = false;
@@ -179,6 +216,7 @@ function RiwayatContent() {
 
   function handleDeviceChange(value: string) {
     setSelectedId(value);
+    setPage(0);
     const params = new URLSearchParams(searchParams.toString());
     if (value) {
       params.set('device', value);
@@ -191,6 +229,7 @@ function RiwayatContent() {
   const selectedDevice = devices.find((d) => d.id === selectedId);
   const lowThresh = Number(threshold?.low_threshold_percent ?? 15);
   const highThresh = Number(threshold?.high_threshold_percent ?? 90);
+  const lastPage = Math.max(0, Math.ceil(totalCount / PAGE_SIZE) - 1);
 
   return (
     <div className="space-y-6">
@@ -369,8 +408,9 @@ function RiwayatContent() {
       {!isLoading && !error && logs.length > 0 && (
         <div className="rounded-lg border border-slate-800/80 bg-slate-900/60">
           <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-3">
-            <span className="text-xs font-medium text-slate-400">
-              {logs.length} catatan terbaru
+            <span className="text-xs font-medium text-slate-400">Log Sensor</span>
+            <span className="text-[11px] text-slate-500">
+              Menampilkan {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + logs.length}
             </span>
           </div>
 
@@ -426,6 +466,74 @@ function RiwayatContent() {
               </tbody>
             </table>
           </div>
+
+          {totalCount > PAGE_SIZE && (
+            <div className="flex items-center justify-center gap-1 border-t border-slate-800/80 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setPage(0)}
+                disabled={page === 0}
+                aria-label="Halaman pertama"
+                className="grid h-8 w-8 place-items-center rounded-md border border-slate-700 bg-slate-800/90 text-slate-200 transition-colors hover:bg-slate-700 focus:ring-2 focus:ring-teal-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                «
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                aria-label="Halaman sebelumnya"
+                className="grid h-8 w-8 place-items-center rounded-md border border-slate-700 bg-slate-800/90 text-slate-200 transition-colors hover:bg-slate-700 focus:ring-2 focus:ring-teal-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ‹
+              </button>
+              {paginationItems(page, lastPage).map((item, idx) => {
+                if (typeof item === 'string') {
+                  return (
+                    <span
+                      key={`${item}-${idx}`}
+                      className="grid h-8 w-6 place-items-center text-xs text-slate-500 select-none"
+                    >
+                      ...
+                    </span>
+                  );
+                }
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setPage(item)}
+                    aria-current={item === page ? 'page' : undefined}
+                    className={`grid h-8 min-w-8 place-items-center rounded-md border px-2 text-xs font-medium transition-colors focus:ring-2 focus:ring-teal-500 focus:outline-none ${
+                      item === page
+                        ? 'border-teal-500/50 bg-teal-600 text-white'
+                        : 'border-slate-700 bg-slate-800/90 text-slate-200 hover:bg-slate-700'
+                    }`}
+                  >
+                    {item + 1}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setPage((p) => p + 1)}
+                disabled={page >= lastPage}
+                aria-label="Halaman berikutnya"
+                className="grid h-8 w-8 place-items-center rounded-md border border-slate-700 bg-slate-800/90 text-slate-200 transition-colors hover:bg-slate-700 focus:ring-2 focus:ring-teal-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ›
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage(lastPage)}
+                disabled={page >= lastPage}
+                aria-label="Halaman terakhir"
+                className="grid h-8 w-8 place-items-center rounded-md border border-slate-700 bg-slate-800/90 text-slate-200 transition-colors hover:bg-slate-700 focus:ring-2 focus:ring-teal-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                »
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
