@@ -6,9 +6,70 @@ import Link from 'next/link';
 import {
   fetchDevices,
   fetchSensorLogs,
+  fetchAggregatedLogs,
+  fetchThresholds,
+  RANGE_OPTIONS,
   type Device,
   type SensorLog,
+  type AggregatedPoint,
+  type ThresholdConfig,
+  type RangeKey,
 } from '@/lib/data';
+
+const CHART_W = 800;
+const CHART_H = 260;
+const PAD = { l: 36, r: 12, t: 12, b: 24 };
+
+function LevelChart({ data, low, high }: { data: AggregatedPoint[]; low: number; high: number }) {
+  const plotW = CHART_W - PAD.l - PAD.r;
+  const plotH = CHART_H - PAD.t - PAD.b;
+
+  const xFor = (i: number) =>
+    data.length <= 1 ? PAD.l + plotW / 2 : PAD.l + (i / (data.length - 1)) * plotW;
+  const yFor = (v: number) => PAD.t + (1 - Math.min(100, Math.max(0, v)) / 100) * plotH;
+
+  const linePts = data.map((d, i) => `${xFor(i)},${yFor(d.avg)}`).join(' ');
+  const areaPath =
+    data.length > 1
+      ? `M ${xFor(0)} ${PAD.t + plotH} ` +
+        data.map((d, i) => `L ${xFor(i)} ${yFor(d.avg)}`).join(' ') +
+        ` L ${xFor(data.length - 1)} ${PAD.t + plotH} Z`
+      : '';
+  const yTicks = [0, 25, 50, 75, 100];
+  const xIdx = data.length <= 1 ? [0] : [0, Math.floor((data.length - 1) / 2), data.length - 1];
+
+  return (
+    <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} className="w-full" role="img" aria-label="Grafik level air">
+      {yTicks.map((t) => (
+        <g key={t}>
+          <line x1={PAD.l} y1={yFor(t)} x2={CHART_W - PAD.r} y2={yFor(t)} stroke="rgb(51 65 85 / 0.5)" strokeWidth={1} />
+          <text x={PAD.l - 6} y={yFor(t) + 3} textAnchor="end" fill="#94a3b8" fontSize={10}>
+            {t}
+          </text>
+        </g>
+      ))}
+
+      {low > 0 && low < 100 && (
+        <line x1={PAD.l} y1={yFor(low)} x2={CHART_W - PAD.r} y2={yFor(low)} stroke="rgb(251 113 133 / 0.5)" strokeWidth={1} strokeDasharray="4 3" />
+      )}
+      {high > 0 && high < 100 && (
+        <line x1={PAD.l} y1={yFor(high)} x2={CHART_W - PAD.r} y2={yFor(high)} stroke="rgb(56 189 248 / 0.5)" strokeWidth={1} strokeDasharray="4 3" />
+      )}
+
+      {areaPath && <path d={areaPath} fill="rgb(20 184 166 / 0.12)" />}
+      {data.length > 0 && (
+        <polyline points={linePts} fill="none" stroke="#14b8a6" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      )}
+      {data.length === 1 && <circle cx={xFor(0)} cy={yFor(data[0].avg)} r={4} fill="#14b8a6" />}
+
+      {xIdx.map((i, idx) => (
+        <text key={idx} x={xFor(i)} y={CHART_H - 6} textAnchor="middle" fill="#94a3b8" fontSize={10}>
+          {new Date(data[i].ts).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+        </text>
+      ))}
+    </svg>
+  );
+}
 
 function RiwayatContent() {
   const searchParams = useSearchParams();
@@ -22,6 +83,12 @@ function RiwayatContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const [range, setRange] = useState<RangeKey>('24h');
+  const [aggLogs, setAggLogs] = useState<AggregatedPoint[]>([]);
+  const [threshold, setThreshold] = useState<ThresholdConfig | null>(null);
+  const [aggLoading, setAggLoading] = useState(true);
+  const [aggError, setAggError] = useState<string | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -69,6 +136,42 @@ function RiwayatContent() {
     };
   }, [selectedId, devices, refreshKey]);
 
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadChart() {
+      if (!selectedId) {
+        setAggLogs([]);
+        setThreshold(null);
+        setAggLoading(false);
+        return;
+      }
+
+      try {
+        setAggLoading(true);
+        setAggError(null);
+        const [agg, th] = await Promise.all([
+          fetchAggregatedLogs(selectedId, range),
+          fetchThresholds(selectedId),
+        ]);
+        if (ignore) return;
+        setAggLogs(agg);
+        setThreshold(th);
+      } catch (err: unknown) {
+        if (ignore) return;
+        setAggError(err instanceof Error ? err.message : 'Gagal memuat grafik.');
+      } finally {
+        if (!ignore) setAggLoading(false);
+      }
+    }
+
+    loadChart();
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedId, range, refreshKey]);
+
   function handleDeviceChange(value: string) {
     setSelectedId(value);
     const params = new URLSearchParams(searchParams.toString());
@@ -81,6 +184,8 @@ function RiwayatContent() {
   }
 
   const selectedDevice = devices.find((d) => d.id === selectedId);
+  const lowThresh = Number(threshold?.low_threshold_percent ?? 15);
+  const highThresh = Number(threshold?.high_threshold_percent ?? 90);
 
   return (
     <div className="space-y-6">
@@ -170,6 +275,50 @@ function RiwayatContent() {
           >
             Buka Manajemen Perangkat
           </Link>
+        </div>
+      )}
+
+      {selectedId && (
+        <div className="rounded-lg border border-slate-800/80 bg-slate-900/60">
+          <div className="flex flex-col gap-3 border-b border-slate-800/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-100">Grafik Level Air</h2>
+              <p className="text-[11px] text-slate-400">Rata-rata level per interval waktu</p>
+            </div>
+            <div className="flex w-full rounded-md border border-slate-700 sm:w-auto" role="group" aria-label="Pilih rentang waktu">
+              {RANGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setRange(opt.key)}
+                  aria-pressed={range === opt.key}
+                  className={`flex-1 px-3 py-1.5 text-[11px] font-medium transition-colors sm:flex-none ${
+                    range === opt.key
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'
+                  } ${opt.key === '1h' ? 'rounded-l-md' : ''} ${opt.key === '7d' ? 'rounded-r-md' : ''}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-4">
+            {aggLoading ? (
+              <div className="h-44 animate-pulse rounded bg-slate-800/40" />
+            ) : aggError ? (
+              <div className="flex h-44 items-center justify-center text-xs text-rose-300">
+                {aggError}
+              </div>
+            ) : aggLogs.length === 0 ? (
+              <div className="flex h-44 items-center justify-center text-xs text-slate-500">
+                Tidak ada data pada rentang waktu ini
+              </div>
+            ) : (
+              <LevelChart data={aggLogs} low={lowThresh} high={highThresh} />
+            )}
+          </div>
         </div>
       )}
 
