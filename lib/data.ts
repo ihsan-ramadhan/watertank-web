@@ -8,8 +8,7 @@ export type AlertLog = Tables<'alert_logs'> & {
   devices?: Pick<Device, 'name' | 'location'> | null;
 };
 
-/* ---------- Devices ---------- */
-
+// devices
 export async function fetchDevices(): Promise<Device[]> {
   const { data, error } = await supabase
     .from('devices')
@@ -40,8 +39,7 @@ export async function updateDevice(id: string, fields: Partial<Device>): Promise
   return data;
 }
 
-/* ---------- Thresholds ---------- */
-
+// thresholds
 export async function fetchThresholds(deviceId: string): Promise<ThresholdConfig | null> {
   const { data, error } = await supabase
     .from('threshold_configs')
@@ -72,17 +70,25 @@ export async function updateThreshold(
   return data;
 }
 
-/* ---------- Sensor logs ---------- */
-
-export async function fetchSensorLogs(deviceId: string, limit = 50): Promise<SensorLog[]> {
+// sensor logs
+export async function fetchSensorLogs(deviceId: string, limit = 50, offset = 0): Promise<SensorLog[]> {
   const { data, error } = await supabase
     .from('sensor_logs')
     .select('*')
     .eq('device_id', deviceId)
     .order('recorded_at', { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
   if (error) throw error;
   return data ?? [];
+}
+
+export async function fetchSensorLogsCount(deviceId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('sensor_logs')
+    .select('*', { count: 'exact', head: true })
+    .eq('device_id', deviceId);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 export async function fetchSensorLogsRange(deviceId: string, hours: number): Promise<SensorLog[]> {
@@ -168,8 +174,7 @@ export async function fetchLatestLogPerDevice(): Promise<Map<string, SensorLog>>
   return map;
 }
 
-/* ---------- Alerts ---------- */
-
+// alerts
 export async function fetchAlerts(): Promise<AlertLog[]> {
   const { data, error } = await supabase
     .from('alert_logs')
@@ -201,8 +206,7 @@ export async function resolveAlert(id: string): Promise<AlertLog> {
   return data;
 }
 
-/* ---------- Status helpers ---------- */
-
+// status helpers
 export type StatusKey = 'safe' | 'critical' | 'info' | 'unknown';
 
 export interface Status {
@@ -248,10 +252,9 @@ export function alertTypeLabel(type: string): string {
   return type;
 }
 
-/* ---------- Format helpers ---------- */
-
+// formatting
 export function formatTime(iso: string | null | undefined): string {
-  if (!iso) return '\u2014';
+  if (!iso) return '-';
   return new Date(iso).toLocaleString('id-ID', {
     day: '2-digit',
     month: 'short',
@@ -262,7 +265,7 @@ export function formatTime(iso: string | null | undefined): string {
 }
 
 export function formatDateShort(ts: string | null | undefined): string {
-  if (!ts) return '\u2014';
+  if (!ts) return '-';
   return new Date(ts).toLocaleString('id-ID', {
     day: '2-digit',
     month: 'short',
@@ -272,7 +275,7 @@ export function formatDateShort(ts: string | null | undefined): string {
 }
 
 export function timeAgo(iso: string | null | undefined): string {
-  if (!iso) return '\u2014';
+  if (!iso) return '-';
   const diff = Date.now() - new Date(iso).getTime();
   const sec = Math.floor(diff / 1000);
   if (sec < 60) return `${sec}d lalu`;
