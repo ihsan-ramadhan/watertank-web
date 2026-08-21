@@ -7,6 +7,7 @@ import {
   resolveAlert,
   type AlertLog,
 } from '@/lib/data';
+import { supabase } from '@/lib/supabaseClient';
 
 type FilterKey = 'all' | 'active' | 'resolved';
 
@@ -55,8 +56,18 @@ export default function AlertsPage() {
 
     load();
 
+    const channel = supabase
+      .channel('alerts-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'alert_logs' },
+        () => load()
+      )
+      .subscribe();
+
     return () => {
       ignore = true;
+      supabase.removeChannel(channel);
     };
   }, [refreshKey]);
 
