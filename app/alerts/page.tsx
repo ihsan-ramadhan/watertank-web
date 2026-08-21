@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   fetchAlerts,
+  resolveAlert,
   type AlertLog,
 } from '@/lib/data';
 
@@ -32,6 +33,7 @@ export default function AlertsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('active');
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -67,6 +69,18 @@ export default function AlertsPage() {
   );
 
   const activeCount = alerts.filter((a) => a.resolved_at === null).length;
+
+  async function handleResolve(id: string) {
+    setResolvingId(id);
+    try {
+      const updated = await resolveAlert(id);
+      setAlerts((prev) => prev.map((a) => (a.id === id ? updated : a)));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal menyelesaikan peringatan.');
+    } finally {
+      setResolvingId(null);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -203,6 +217,18 @@ export default function AlertsPage() {
                     </p>
                   </div>
                 </div>
+                {!isResolved && (
+                  <div className="shrink-0 sm:self-center">
+                    <button
+                      type="button"
+                      onClick={() => handleResolve(alert.id)}
+                      disabled={resolvingId === alert.id}
+                      className="rounded-md border border-slate-700 bg-slate-800/90 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700 focus:ring-2 focus:ring-teal-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {resolvingId === alert.id ? 'Menyelesaikan...' : 'Tandai Selesai'}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
